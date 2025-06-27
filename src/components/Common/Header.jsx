@@ -2,20 +2,40 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
-import SearchBar from './SearchBar';
 import '../../styles/Header.css';
 
 function Header() {
-  const authContext = useAuth();
-  const cartContext = useCart();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-
-  // Safely destructure with fallback
-  const user = authContext?.user;
-  const role = authContext?.role;
-  const cart = cartContext?.cart || [];
+  const navigate = useNavigate();
+  
+  // Safe context usage with error handling
+  let user = null;
+  let role = null;
+  let cart = [];
+  
+  try {
+    const authContext = useAuth();
+    user = authContext?.user;
+    role = authContext?.role;
+    
+    const cartContext = useCart();
+    cart = cartContext?.cart || [];
+  } catch (error) {
+    console.error('Error accessing context in Header:', error);
+  }
 
   const cartCount = cart.reduce((sum, item) => sum + (item.quantity || 0), 0);
+
+  const handleLogout = async () => {
+    try {
+      const { signOut } = await import('firebase/auth');
+      const { auth } = await import('../../firebase');
+      await signOut(auth);
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout failed:', error);
+    }
+  };
 
   return (
     <header className="header">
@@ -24,14 +44,19 @@ function Header() {
           🌾 FarmShop
         </Link>
         
-        <SearchBar />
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Search products..."
+            className="search-input"
+          />
+          <button className="search-btn">🔍</button>
+        </div>
         
         <nav className={`nav ${isMenuOpen ? 'nav-open' : ''}`}>
           <Link to="/products" onClick={() => setIsMenuOpen(false)}>Marketplace</Link>
           <Link to="/blogs" onClick={() => setIsMenuOpen(false)}>Blog</Link>
           <Link to="/crop-prices" onClick={() => setIsMenuOpen(false)}>Crop Prices</Link>
-          <Link to="/plant-disease" onClick={() => setIsMenuOpen(false)}>Plant Disease</Link>
-          <Link to="/soil-recommendation" onClick={() => setIsMenuOpen(false)}>Soil Analysis</Link>
           <Link to="/contact" onClick={() => setIsMenuOpen(false)}>Contact</Link>
           
           {user && (
@@ -50,7 +75,7 @@ function Header() {
           {user ? (
             <div className="user-menu">
               <Link to="/account" onClick={() => setIsMenuOpen(false)}>👤 Account</Link>
-              <Link to="/settings" onClick={() => setIsMenuOpen(false)}>⚙️ Settings</Link>
+              <button onClick={handleLogout} className="logout-btn">Logout</button>
             </div>
           ) : (
             <div className="auth-links">

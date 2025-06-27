@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { db, storage } from '../../firebase';
-import { collection, addDoc, doc, getDoc, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from 'firebase/storage';
+import { db } from '../../firebase';
+import { collection, addDoc, doc, getDoc, updateDoc, setDoc } from 'firebase/firestore';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
 import '../../styles/Admin.css';
 
 function AddProduct() {
   const { productId } = useParams();
   const navigate = useNavigate();
+  const { user, role } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -16,75 +17,74 @@ function AddProduct() {
     category: '',
     specifications: '',
     videoUrl: '',
-    discount: ''
+    discount: '',
+    imageUrl: '', // Single image URL instead of file upload
+    additionalImages: [''] // Additional image URLs
   });
 
-  const [imageFiles, setImageFiles] = useState([]);
-  const [existingImages, setExistingImages] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState([]);
   const [errors, setErrors] = useState({});
 
-  const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
-  const MAX_FILES = 5;
-  const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-
   useEffect(() => {
-    const fetchProduct = async () => {
-      try {
-        const docRef = doc(db, 'products', productId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setFormData({
-            name: data.name || '',
-            price: data.price || '',
-            description: data.description || '',
-            category: data.category || '',
-            specifications: data.specifications || '',
-            videoUrl: data.videoUrl || '',
-            discount: data.discount || ''
-          });
-          setExistingImages(data.imageUrls || []);
-        } else {
-          alert('Product not found');
-          navigate('/admin');
+    // Ensure user role is admin
+    if (user && role !== 'admin') {
+      navigate('/');
+      return;
+    }
+
+    // Ensure user document exists in Firestore
+    const ensureUserDoc = async () => {
+      if (user && role === 'admin') {
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (!userDoc.exists()) {
+            // Create user document with admin role
+            await setDoc(userDocRef, { 
+              role: 'admin', 
+              email: user.email,
+              createdAt: new Date() 
+            });
+          }
+        } catch (error) {
+          console.error('Error ensuring user document:', error);
         }
-      } catch (error) {
-        console.error('Error fetching product:', error);
-        alert('Error fetching product data');
-        navigate('/admin');
       }
     };
+
+    ensureUserDoc();
 
     if (productId) {
       fetchProduct();
     }
-  }, [productId]);
+  }, [productId, user, role, navigate]);
 
-  const validateFiles = (files) => {
-    const newErrors = {};
-    
-    if (files.length > MAX_FILES) {
-      newErrors.files = `Maximum ${MAX_FILES} images allowed`;
-      return newErrors;
-    }
-
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      
-      if (!ALLOWED_TYPES.includes(file.type)) {
-        newErrors.files = 'Only JPEG, JPG, PNG, and WebP images are allowed';
-        break;
+  const fetchProduct = async () => {
+    try {
+      const docRef = doc(db, 'products', productId);
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setFormData({
+          name: data.name || '',
+          price: data.price || '',
+          description: data.description || '',
+          category: data.category || '',
+          specifications: data.specifications || '',
+          videoUrl: data.videoUrl || '',
+          discount: data.discount || '',
+          imageUrl: data.imageUrl || '',
+          additionalImages: data.additionalImages || ['']
+        });
+      } else {
+        alert('Product not found');
+        navigate('/admin');
       }
-      
-      if (file.size > MAX_FILE_SIZE) {
-        newErrors.files = `Each image must be less than ${MAX_FILE_SIZE / (1024 * 1024)}MB`;
-        break;
-      }
+    } catch (error) {
+      console.error('Error fetching product:', error);
+      alert('Error fetching product data');
+      navigate('/admin');
     }
-
-    return newErrors;
   };
 
   const handleInputChange = (e) => {
@@ -94,7 +94,6 @@ function AddProduct() {
       [name]: value
     }));
     
-    // Clear error when user starts typing
     if (errors[name]) {
       setErrors(prev => ({
         ...prev,
@@ -103,69 +102,29 @@ function AddProduct() {
     }
   };
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    const fileErrors = validateFiles(files);
-    
-    if (Object.keys(fileErrors).length > 0) {
-      setErrors(fileErrors);
-      e.target.value = '';
-      return;
-    }
-
-    setImageFiles(files);
-    setUploadProgress(new Array(files.length).fill(0));
-    setErrors(prev => ({ ...prev, files: '' }));
+  const handleAdditionalImageChange = (index, value) => {
+    const newImages = [...formData.additionalImages];
+    newImages[index] = value;
+    setFormData(prev => ({
+      ...prev,
+      additionalImages: newImages
+    }));
   };
 
-  const uploadImages = async () => {
-    const uploadPromises = imageFiles.map((file, index) => {
-      return new Promise((resolve, reject) => {
-        const fileName = `${Date.now()}-${index}-${file.name}`;
-        const storageRef = ref(storage, `product-images/${fileName}`);
-        const uploadTask = uploadBytesResumable(storageRef, file);
-
-        uploadTask.on(
-          'state_changed',
-          (snapshot) => {
-            const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-            setUploadProgress(prev => {
-              const newProgress = [...prev];
-              newProgress[index] = progress;
-              return newProgress;
-            });
-          },
-          (error) => {
-            console.error('Upload error:', error);
-            reject(error);
-          },
-          async () => {
-            try {
-              const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-              resolve(downloadURL);
-            } catch (error) {
-              reject(error);
-            }
-          }
-        );
-      });
-    });
-
-    return Promise.all(uploadPromises);
+  const addImageField = () => {
+    setFormData(prev => ({
+      ...prev,
+      additionalImages: [...prev.additionalImages, '']
+    }));
   };
 
-  const removeExistingImage = async (imageUrl, index) => {
-    try {
-      // Remove from Firebase Storage
-      const imageRef = ref(storage, imageUrl);
-      await deleteObject(imageRef);
-      
-      // Remove from state
-      setExistingImages(prev => prev.filter((_, i) => i !== index));
-    } catch (error) {
-      console.error('Error removing image:', error);
-      // Still remove from state even if storage deletion fails
-      setExistingImages(prev => prev.filter((_, i) => i !== index));
+  const removeImageField = (index) => {
+    if (formData.additionalImages.length > 1) {
+      const newImages = formData.additionalImages.filter((_, i) => i !== index);
+      setFormData(prev => ({
+        ...prev,
+        additionalImages: newImages
+      }));
     }
   };
 
@@ -176,13 +135,24 @@ function AddProduct() {
     if (!formData.price || formData.price <= 0) newErrors.price = 'Valid price is required';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
     if (!formData.category.trim()) newErrors.category = 'Category is required';
-    
-    if (existingImages.length === 0 && imageFiles.length === 0) {
-      newErrors.images = 'At least one product image is required';
+    if (!formData.imageUrl.trim()) newErrors.imageUrl = 'At least one product image URL is required';
+
+    // Validate image URL format
+    if (formData.imageUrl && !isValidUrl(formData.imageUrl)) {
+      newErrors.imageUrl = 'Please enter a valid image URL';
     }
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const isValidUrl = (string) => {
+    try {
+      new URL(string);
+      return true;
+    } catch (_) {
+      return false;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -195,18 +165,13 @@ function AddProduct() {
     setLoading(true);
 
     try {
-      let newImageUrls = [];
-      
-      if (imageFiles.length > 0) {
-        newImageUrls = await uploadImages();
-      }
-
-      const allImageUrls = [...existingImages, ...newImageUrls];
-      
       const priceFloat = parseFloat(formData.price);
       const discountFloat = parseFloat(formData.discount) || 0;
       const discountedPrice = discountFloat > 0 ? 
         priceFloat - (priceFloat * discountFloat / 100) : priceFloat;
+
+      // Filter out empty additional image URLs
+      const additionalImages = formData.additionalImages.filter(url => url.trim() !== '');
 
       const productData = {
         name: formData.name.trim(),
@@ -217,7 +182,9 @@ function AddProduct() {
         videoUrl: formData.videoUrl.trim(),
         discount: discountFloat,
         discountedPrice,
-        imageUrls: allImageUrls,
+        imageUrl: formData.imageUrl.trim(), // Main image
+        additionalImages, // Additional images array
+        createdBy: user.uid,
         updatedAt: new Date(),
       };
 
@@ -240,20 +207,27 @@ function AddProduct() {
         category: '',
         specifications: '',
         videoUrl: '',
-        discount: ''
+        discount: '',
+        imageUrl: '',
+        additionalImages: ['']
       });
-      setImageFiles([]);
-      setExistingImages([]);
-      setUploadProgress([]);
       
       navigate('/admin');
     } catch (error) {
       console.error('Error saving product:', error);
-      alert('Error saving product. Please try again.');
+      alert('Error saving product: ' + error.message);
     } finally {
       setLoading(false);
     }
   };
+
+  if (!user) {
+    return <div className="loading">Please log in to continue...</div>;
+  }
+
+  if (role !== 'admin') {
+    return <div className="error">Access denied. Admin privileges required.</div>;
+  }
 
   return (
     <div className="add-product-container">
@@ -366,62 +340,72 @@ function AddProduct() {
         </div>
 
         <div className="form-group">
-          <label>Product Images * (Max {MAX_FILES} images, 5MB each)</label>
+          <label>Main Product Image URL *</label>
           <input
-            type="file"
-            accept="image/jpeg,image/jpg,image/png,image/webp"
-            multiple
-            onChange={handleImageChange}
-            className={errors.files || errors.images ? 'error' : ''}
+            type="url"
+            name="imageUrl"
+            value={formData.imageUrl}
+            onChange={handleInputChange}
+            placeholder="https://example.com/image.jpg"
+            className={errors.imageUrl ? 'error' : ''}
           />
-          <small>Supported formats: JPEG, JPG, PNG, WebP</small>
-          {errors.files && <span className="error-text">{errors.files}</span>}
-          {errors.images && <span className="error-text">{errors.images}</span>}
+          {errors.imageUrl && <span className="error-text">{errors.imageUrl}</span>}
+          {formData.imageUrl && (
+            <div className="image-preview">
+              <img 
+                src={formData.imageUrl} 
+                alt="Main product preview" 
+                style={{ width: '200px', height: '200px', objectFit: 'cover', marginTop: '10px' }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            </div>
+          )}
         </div>
 
-        {/* Existing Images Preview */}
-        {existingImages.length > 0 && (
-          <div className="existing-images">
-            <h4>Current Images:</h4>
-            <div className="image-preview-grid">
-              {existingImages.map((url, index) => (
-                <div key={index} className="image-preview">
-                  <img src={url} alt={`Product ${index + 1}`} />
-                  <button
-                    type="button"
-                    onClick={() => removeExistingImage(url, index)}
-                    className="remove-image-btn"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* New Images Preview */}
-        {imageFiles.length > 0 && (
-          <div className="new-images">
-            <h4>New Images:</h4>
-            <div className="image-preview-grid">
-              {imageFiles.map((file, index) => (
-                <div key={index} className="image-preview">
+        <div className="form-group">
+          <label>Additional Product Images</label>
+          {formData.additionalImages.map((imageUrl, index) => (
+            <div key={index} className="additional-image-row">
+              <input
+                type="url"
+                value={imageUrl}
+                onChange={(e) => handleAdditionalImageChange(index, e.target.value)}
+                placeholder="https://example.com/additional-image.jpg"
+                style={{ flex: 1, marginRight: '10px' }}
+              />
+              {formData.additionalImages.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => removeImageField(index)}
+                  className="remove-btn"
+                >
+                  Remove
+                </button>
+              )}
+              {imageUrl && (
+                <div className="image-preview">
                   <img 
-                    src={URL.createObjectURL(file)} 
-                    alt={`New ${index + 1}`} 
+                    src={imageUrl} 
+                    alt={`Additional preview ${index + 1}`} 
+                    style={{ width: '100px', height: '100px', objectFit: 'cover', marginTop: '5px' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
                   />
-                  <div className="upload-progress">
-                    <div 
-                      className="progress-bar"
-                      style={{ width: `${uploadProgress[index] || 0}%` }}
-                    />
-                  </div>
                 </div>
-              ))}
+              )}
             </div>
-          </div>
-        )}
+          ))}
+          <button
+            type="button"
+            onClick={addImageField}
+            className="add-image-btn"
+          >
+            + Add Another Image
+          </button>
+        </div>
 
         <div className="form-actions">
           <button type="submit" disabled={loading} className="submit-btn">
@@ -433,6 +417,18 @@ function AddProduct() {
           </button>
         </div>
       </form>
+
+      <div className="image-sources-info">
+        <h4>Where to get image URLs:</h4>
+        <ul>
+          <li><strong>Unsplash:</strong> unsplash.com (free stock photos)</li>
+          <li><strong>Pixabay:</strong> pixabay.com (free images)</li>
+          <li><strong>Pexels:</strong> pexels.com (free stock photos)</li>
+          <li><strong>Google Images:</strong> Right-click → "Copy image address"</li>
+          <li><strong>Your own hosting:</strong> Upload to any image hosting service</li>
+        </ul>
+        <p><small>Make sure to use direct image URLs that end with .jpg, .png, .gif, etc.</small></p>
+      </div>
     </div>
   );
 }

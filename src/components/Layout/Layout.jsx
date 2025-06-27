@@ -1,17 +1,15 @@
 import React from 'react';
 import Header from '../Common/Header';
 import Footer from '../Common/Footer';
-import ChatBot from '../Common/ChatBot';
 
 function Layout({ children }) {
   return (
     <div className="app-layout">
       <Header />
-      <main className="main-content">
+      <main className="main-content" style={{ minHeight: 'calc(100vh - 160px)', paddingTop: '20px' }}>
         {children}
       </main>
       <Footer />
-      <ChatBot />
     </div>
   );
 }
