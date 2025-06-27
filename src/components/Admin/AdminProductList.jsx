@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useNavigate } from 'react-router-dom';
 import '../../styles/Admin.css';
@@ -19,7 +19,7 @@ function AdminProductList() {
       setLoading(true);
       setError(null);
       try {
-        const q = query(collection(db, 'products'), where('userId', '==', user.uid));
+        const q = query(collection(db, 'products'), where('createdBy', '==', user.uid));
         const querySnapshot = await getDocs(q);
         const productsData = [];
         querySnapshot.forEach((doc) => {
@@ -36,6 +36,19 @@ function AdminProductList() {
 
     fetchProducts();
   }, [user]);
+
+  const handleDelete = async (productId) => {
+    if (window.confirm('Are you sure you want to delete this product?')) {
+      try {
+        await deleteDoc(doc(db, 'products', productId));
+        setProducts(products => products.filter(product => product.id !== productId));
+        alert('Product deleted successfully!');
+      } catch (error) {
+        alert('Failed to delete product.');
+        console.error(error);
+      }
+    }
+  };
 
   const handleEdit = (productId) => {
     navigate(`/admin/edit-product/${productId}`);
@@ -58,6 +71,9 @@ function AdminProductList() {
                 <h4>{product.name}</h4>
                 <p>Price: ₹{product.price}</p>
                 <button onClick={() => handleEdit(product.id)}>Edit</button>
+                <button onClick={() => handleDelete(product.id)} style={{ marginLeft: 8, background: '#dc3545', color: '#fff' }}>
+                  Delete
+                </button>
               </div>
             </li>
           ))}

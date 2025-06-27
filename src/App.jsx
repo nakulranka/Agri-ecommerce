@@ -20,6 +20,9 @@ import CropPrices from './pages/CropPrices';
 import Contact from './components/Client/Contact';
 import PlantDisease from './components/ML/PlantDisease';
 import SoilRecommendation from './components/ML/SoilRecommendation';
+import EditBlog from './components/Admin/EditBlog';
+import EditOrder from './components/Admin/EditOrder';
+import EditProduct from './components/Admin/EditProduct'; // Import the EditProduct component
 import NotFound from './pages/NotFound';
 import './styles/App.css';
 
@@ -47,6 +50,9 @@ function App() {
                 <Route path="/contact" element={<Contact />} />
                 <Route path="/plant-disease" element={<PlantDisease />} />
                 <Route path="/soil-recommendation" element={<SoilRecommendation />} />
+                <Route path="/admin/edit-blog/:id" element={<EditBlog />} />
+                <Route path="/admin/edit-order/:id" element={<EditOrder />} />
+                <Route path="/admin/edit-product/:id" element={<EditProduct />} /> {/* Add this route */}
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Layout>

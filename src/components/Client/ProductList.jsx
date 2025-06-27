@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../../firebase';
+import { useCart } from '../../context/CartContext';
 import '../../styles/Product.css';
 
 function ProductList() {
   const [products, setProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const { addToCart } = useCart();
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -23,29 +25,27 @@ function ProductList() {
   );
 
   const ProductCard = ({ product }) => {
-    const mainImage = product.imageUrl; // Main image
-    const additionalImages = product.additionalImages || []; // Additional images array
+    const mainImage = product.imageUrl;
+    const additionalImages = product.additionalImages || [];
 
     return (
       <div className="product-card">
-        <div className="product-image">
-          <img
-            src={mainImage || '/placeholder-image.jpg'}
-            alt={product.name}
-            onError={(e) => {
-              e.target.src = '/placeholder-image.jpg';
-            }}
-          />
-          {product.discount > 0 && (
-            <span className="discount-badge">-{product.discount}%</span>
-          )}
-        </div>
-
+        <Link to={`/product/${product.id}`}>
+          <div className="product-image">
+            <img
+              src={mainImage || '/placeholder-image.jpg'}
+              alt={product.name}
+              onError={e => { e.target.src = '/placeholder-image.jpg'; }}
+            />
+            {product.discount > 0 && (
+              <span className="discount-badge">-{product.discount}%</span>
+            )}
+          </div>
+        </Link>
         <div className="product-info">
           <h3>{product.name}</h3>
           <p className="category">{product.category}</p>
           <p className="description">{product.description.substring(0, 100)}...</p>
-
           <div className="price-info">
             {product.discount > 0 ? (
               <>
@@ -56,8 +56,10 @@ function ProductList() {
               <span className="price">₹{product.price}</span>
             )}
           </div>
-
-          <button className="add-to-cart-btn">
+          <button
+            className="add-to-cart-btn"
+            onClick={() => addToCart({ ...product, quantity: 1 })}
+          >
             Add to Cart
           </button>
         </div>
