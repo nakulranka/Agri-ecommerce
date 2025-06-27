@@ -1,0 +1,27 @@
+.admin-section {
+  margin-bottom: 20px;
+}
+
+.admin-section h3 {
+  margin-bottom: 10px;
+}
+
+.admin-section form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 500px;
+}
+
+.admin-section input,
+.admin-section textarea {
+  padding: 8px;
+}
+
+.admin-section button {
+  background-color: #4caf50;
+  color: white;
+  border: none;
+  padding: 10px;
+  cursor: pointer;
+}
