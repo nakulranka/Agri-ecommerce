@@ -8,9 +8,8 @@ function Cart() {
   const navigate = useNavigate();
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-
   const handleCheckout = () => {
-    navigate('/checkout/address');
+    navigate('/checkout');
   };
 
   if (cart.length === 0) {

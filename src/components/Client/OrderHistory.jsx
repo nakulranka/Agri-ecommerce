@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { db } from '../../firebase';
 import { collection, query, where, getDocs, orderBy } from 'firebase/firestore';
+import '../../styles/OrderHistory.css';
 
 function OrderHistory() {
   const { user } = useAuth();
@@ -64,25 +65,37 @@ function OrderHistory() {
       
       <div className="orders-list">
         {orders.map((order) => (
-          <div key={order.id} className="order-card">
-            <div className="order-header">
+          <div key={order.id} className="order-card">            <div className="order-header">
               <h3>Order #{order.id.slice(-8)}</h3>
-              <span 
-                className="status" 
-                style={{ color: getStatusColor(order.status) }}
-              >
-                {order.status?.toUpperCase()}
-              </span>
+              <div className="order-status">
+                <span 
+                  className="status" 
+                  style={{ color: getStatusColor(order.status) }}
+                >
+                  {order.status?.toUpperCase()}
+                </span>
+                <span className="payment-status">
+                  Payment: {order.paymentStatus?.toUpperCase() || 'PENDING'}
+                </span>
+              </div>
             </div>
             
-            <p>Date: {order.orderDate?.toLocaleDateString()}</p>
-            <p>Total: ₹{order.totalAmount}</p>
-            
-            <div className="order-items">
+            <div className="order-meta">
+              <p><strong>Order Date:</strong> {order.orderDate?.toLocaleDateString()}</p>
+              <p><strong>Total Amount:</strong> ₹{order.totalAmount}</p>
+              {order.trackingNumber && (
+                <p><strong>Tracking:</strong> {order.trackingNumber}</p>
+              )}
+              {order.estimatedDelivery && (
+                <p><strong>Estimated Delivery:</strong> {new Date(order.estimatedDelivery.seconds * 1000).toLocaleDateString()}</p>
+              )}
+            </div>
+              <div className="order-items">
               <h4>Items:</h4>
-              {order.items?.map((item, index) => (
+              {(order.items || order.products || []).map((item, index) => (
                 <div key={index} className="order-item">
-                  {item.name} x {item.quantity} - ₹{item.price * item.quantity}
+                  <span>{item.name} x {item.quantity}</span>
+                  <span>₹{item.price * item.quantity}</span>
                 </div>
               ))}
             </div>
